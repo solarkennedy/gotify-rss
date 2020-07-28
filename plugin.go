@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gotify/plugin-api"
-	"github.com/mmcdole/gofeed"
 	"log"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/gotify/plugin-api"
+	"github.com/mmcdole/gofeed"
 )
 
 type Storage struct {
@@ -16,8 +17,8 @@ type Storage struct {
 }
 
 type Config struct {
-	RefreshInterval int    `yaml:"refresh_interval"`
-	FeedURL         string `yaml:"feed_url"`
+	RefreshInterval int      `yaml:"refresh_interval"`
+	FeedURLs        []string `yaml:"feed_urls"`
 }
 
 func GetGotifyPluginInfo() plugin.Info {
@@ -54,20 +55,22 @@ func (c *RssPlugin) FetchFeed() {
 	}
 
 	fp := gofeed.NewParser()
-	feed, err := fp.ParseURL(c.config.FeedURL)
-	if err != nil {
-		log.Printf("error while fetching feed: %v", err)
-		return
-	}
+	for _, url := range c.config.FeedURLs {
+		feed, err := fp.ParseURL(url)
+		if err != nil {
+			log.Printf("error while fetching feed: %v", err)
+			continue
+		}
 
-	for _, item := range feed.Items {
-		log.Printf("Parsing entry %s", item.Title)
-		if item.PublishedParsed.After(storage.LastPublished) {
-			storage.LastPublished = *item.PublishedParsed
-			_ = c.msgHandler.SendMessage(plugin.Message{
-				Title:   item.Title,
-				Message: item.Link,
-			})
+		for _, item := range feed.Items {
+			log.Printf("Parsing entry %s", item.Title)
+			if item.PublishedParsed.After(storage.LastPublished) {
+				storage.LastPublished = *item.PublishedParsed
+				_ = c.msgHandler.SendMessage(plugin.Message{
+					Title:   item.Title,
+					Message: item.Link,
+				})
+			}
 		}
 	}
 
@@ -149,7 +152,11 @@ func (c *RssPlugin) SetMessageHandler(h plugin.MessageHandler) {
 
 func (c *RssPlugin) DefaultConfig() interface{} {
 	return &Config{
-		FeedURL:         "https://lorem-rss.herokuapp.com/feed",
+		FeedURLs: []string{
+			"https://lorem-rss.herokuapp.com/feed",
+			"https://xkcd.com/rss.xml",
+			"https://news.ycombinator.com/rss",
+		},
 		RefreshInterval: 3600,
 	}
 }
